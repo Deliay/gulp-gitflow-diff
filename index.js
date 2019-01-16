@@ -2,6 +2,7 @@
 var gutil = require('gulp-util');
 var through = require('through2');
 var execSync = require('child_process').execSync;
+var path = require('path');
 
 function diffBranches(options) {
     var filesChanged = [];
@@ -11,13 +12,19 @@ function diffBranches(options) {
     }
 
     var cmd = 'git diff --name-only $(git merge-base ' + options.baseBranch + ' HEAD)..HEAD';
-    filesChanged = execSync(cmd, {encoding: 'utf8'});
-    filesChanged = filesChanged.split("\n");
+    if (process.platform === 'win32') {
+        cmd = 'powershell -NoProfile ' + cmd;
+    }
+    const executeResult = execSync(cmd, {encoding: 'utf8'});
+    if (executeResult) {
+        filesChanged = executeResult.split("\n").map(filePath => path.resolve(filePath));
+    }
+    
     // last entry is just empty string
     filesChanged.pop();
 
     return through.obj(
-        function (file, enc, cb) {
+        function (file, _enc, cb) {
             if (isFileChanged(file, filesChanged)) {
                 this.push(file);
             }
@@ -27,8 +34,7 @@ function diffBranches(options) {
 };
 
 function isFileChanged(file, filesChanged) {
-    var currentFile = file.path.substr(process.cwd().length + 1);
-    if (filesChanged.indexOf(currentFile) != -1) {
+    if (filesChanged.indexOf(file.path) != -1) {
         return true;
     } else {
         return false;
